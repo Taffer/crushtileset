@@ -12,14 +12,15 @@ maintained in approximately forever (in Internet Years at least).
 
 ## Requirements
 
-TBD
+* ElementTree
+* PIL
 
 ## Usage
 
 TBD, but something like:
 
 ```sh
-crushtileset --outdir output map.tmx
+crushtileset --out output map.tmx
 ```
 
 Where `output` is the output directory. It'll load the map in `map.tmx`, any
