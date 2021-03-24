@@ -15,6 +15,15 @@ maintained in approximately forever (in Internet Years at least).
 * ElementTree
 * PIL
 
+## Limitations
+
+The current version works with *one* tileset and *one* layer only. Future
+versions will add support for:
+
+* More than one layer.
+* More than one tileset.
+* ???
+
 ## Usage
 
 TBD, but something like:
@@ -30,6 +39,12 @@ that only contain the tiles from each tileset that are actually used.
 
 * Initially only works with one tileset and one map layer, will expand as
   necessary in the future.
+
+## Bribe me
+
+Want to bribe me to work on multi-layer and multi-tileset support faster?
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U7U541Y8C)
 
 ## License
 

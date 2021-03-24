@@ -23,6 +23,8 @@ class Map:
         return self.root.find('tileset').attrib['source']
 
     def get_data(self, layer=1):
+        ''' Currently only one layer is supported, CSV only.
+        '''
         the_layer = self.root.find('layer')
 
         layer_id = the_layer.attrib['id']
@@ -40,20 +42,41 @@ class Map:
 
         return data
 
+    def set_tileset_source(self, source):
+        self.root.find('tileset').attrib['source'] = source
+
+    def set_data(self, data, layer=1):
+        ''' Currently only one layer is supported.
+        '''
+        lines = []
+        for row in data:
+            line = ','.join([str(x) for x in row])
+        new_data = ',\n'.join(lines)
+
+        the_layer = self.root.find('layer')
+        data = the_layer.find('data')
+        if data.attrib['encoding'] != 'csv':
+            raise RuntimeError('Unable to write layer data in {0} format'.format(data.attrib['encoding']))
+
+        data.text = new_data
+
 
 class Tileset:
     def __init__(self, filename):
         self.tree = ElementTree.parse(filename)
         self.root = self.tree.getroot()
+        self.width = int(self.root.attrib['tilewidth'])
+        self.height = int(self.root.attrib['tileheight'])
+        self.columns = int(self.root.attrib['columns'])
 
     def get_texture_filename(self):
         return self.root.find('image').attrib['source']
 
     def get_tile_width(self):
-        return int(self.root.attrib['tilewidth'])
+        return self.width
 
     def get_tile_height(self):
-        return int(self.root.attrib['tileheight'])
+        return self.height
 
     def count_tiles(self):
         return int(self.root.attrib['tilecount'])
@@ -61,14 +84,45 @@ class Tileset:
     def count_columns(self):
         return int(self.root.attrib['columns'])
 
+    def find_tile(self, index):
+        ''' Find the given tile using its 1-based index. Return x, y offsets.
+        '''
+        x = index % self.columns
+        y = index // self.columns
+
+        return x * self.width, y * self.height
+
+    def set_columns(self, columns):
+        self.root.attrib['columns'] = columns
+
+    def set_source(self, source, width, height):
+        image = self.root.find('image')
+        image.attrib['source'] = source
+        image.attrib['width'] = width
+        image.attrib['height'] = height
+
+    def remove_terrains(self):
+        # Delete <terraintypes>, remove "terrain" attribute from all <tile>.
+        terraintypes = self.root.find('terraintypes')
+        root.remove(terraintypes)
+
+        for tile in root.findall('tile'):
+            new_attrib = {key: value for (key, value) in tile.attrib.items() if key != 'terrain'}
+            tile.attrib = new_attrib
+
 
 def lookup_size(num_tiles, tile_width, tile_height):
+    ''' Look up the texture size suitable for this many tiles of this size.
+    '''
     if tile_width != tile_height:
         raise RuntimeError('Tile width must match tile height, got {0} x {1}'.format(tile_width, tile_height))
 
     tile_square = math.ceil(math.sqrt(num_tiles))
     texture_size = tile_square * tile_width
 
+    # Brute force! These are expected to be small (less than 1,000,000, right?)
+    # so this isn't too horrible. There's probably a smarter, more complex
+    # way to do this.
     size = 1
     while size < texture_size:
         size = size << 1
@@ -76,7 +130,16 @@ def lookup_size(num_tiles, tile_width, tile_height):
     return size
 
 
+def crush_filename(filename):
+    ''' Crushing in progress...
+    '''
+    parts = os.path.splitext(filename)
+    return parts[0] + '-crushed' + parts[1]
+
+
 def main():
+    ''' This is too long for a "real" program.
+    '''
     parser = argparse.ArgumentParser(description='Create a texture atlas of only the tiles used in a map.',
                                      epilog='Textures are read out of the map file.')
     parser.add_argument('-o', '--out', metavar='output_map', help='output Map name; default is input_map-crushed', default=None)
@@ -88,7 +151,7 @@ def main():
     if parts[-1] != '.tmx':
         raise SystemExit('Unknown file extension "{0}"'.format(parts[-1]))
     if args.out is None:
-        args.out = parts[0] + '-crushed' + parts[1]
+        args.out = crush_filename(args.input_map)
 
     print('Crushing in progress, {0} ➜ {1}...'.format(args.input_map, args.out))
 
@@ -113,7 +176,7 @@ def main():
     # the ceil(sqrt(used_tiles)) * tile_width pixels.
     new_image_size = lookup_size(len(used_tiles), input_tileset.get_tile_width(), input_tileset.get_tile_height())
 
-    print('Building a new {0}x{0} texture'.format(new_image_size))
+    print('Building a new {0} x {0} texture'.format(new_image_size))
 
     output_texture = Image.new(input_texture.mode, (new_image_size, new_image_size))
 
@@ -122,6 +185,27 @@ def main():
     # - copy it to output_texture
     # - record its location
     # Write output_texture.
+    tile_width = input_tileset.get_tile_width()
+    tile_height = input_tileset.get_tile_height()
+
+    dx = 0  # Offset to write the next tile at.
+    dy = 0
+
+    for item in used_tiles:
+        tx, ty = input_tileset.find_tile(item)
+        print('[{0}] = {1}, {2}'.format(item, tx, ty))
+        region = (tx, ty, tx + tile_width, ty + tile_height)
+        with input_texture.crop(region) as chunk:
+            target = (dx, dy, dx + tile_width, dy + tile_height)
+            output_texture.paste(chunk, target)
+
+        dx = dx + tile_width
+        if dx + tile_width > new_image_size:
+            dx = 0
+            dy = dy + tile_height
+
+    output_texture_filename = crush_filename(input_tileset.get_texture_filename())
+    output_texture.save(output_texture_filename, 'PNG')
 
     # Go through .tsx file:
     # - remove terrains
