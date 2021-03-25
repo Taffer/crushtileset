@@ -20,6 +20,7 @@ maintained in approximately forever (in Internet Years at least).
 The current version works with *one* tileset and *one* layer only. Future
 versions will add support for:
 
+* Map data in formats other than CSV.
 * More than one layer.
 * More than one tileset.
 * ???
