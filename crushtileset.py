@@ -92,7 +92,11 @@ class Tileset:
         self.root = self.tree.getroot()
         self.width = int(self.root.attrib['tilewidth'])
         self.height = int(self.root.attrib['tileheight'])
-        self.columns = int(self.root.attrib['columns'])
+
+        if 'columns' in self.root.attrib:
+            self.columns = int(self.root.attrib['columns'])
+        else:
+            self.columns = int(self.root.find('image').attrib['width']) // self.width
 
     def save(self, filename):
         self.tree.write(filename, encoding='UTF-8', xml_declaration=True)
@@ -107,14 +111,21 @@ class Tileset:
         return self.height
 
     def count_tiles(self):
-        return int(self.root.attrib['tilecount'])
+        if 'tilecount' in self.root.attrib:
+            return int(self.root.attrib['tilecount'])
+
+        return self.columns * int(self.root.find('image').attrib['height']) // self.height
 
     def count_columns(self):
-        return int(self.root.attrib['columns'])
+        if 'columns' in self.root.attrib:
+            return int(self.root.attrib['columns'])
+
+        return int(self.root.find('image').attrib['width']) // self.width
 
     def find_tile(self, index):
         ''' Find the given tile using its 1-based index. Return x, y offsets.
         '''
+        index = index - 1
         x = index % self.columns
         y = index // self.columns
 
@@ -123,6 +134,9 @@ class Tileset:
     def set_name(self, filename):
         parts = os.path.splitext(filename)
         self.root.attrib['name'] = parts[0]
+
+    def set_tile_count(self, count):
+        self.root.attrib['tilecount'] = str(count)
 
     def set_columns(self, columns):
         self.root.attrib['columns'] = str(columns)
@@ -192,10 +206,10 @@ def do_crushing(input_filename, output_filename):
 
     used_tiles = []
     data = input_map.get_data()
-    for row in data:
-        for column in row:
-            if column not in used_tiles:
-                used_tiles.append(column)
+    for column in data:
+        for row in column:
+            if row not in used_tiles:
+                used_tiles.append(row)
     used_tiles.sort()
 
     print('{0} used tiles out of {1}'.format(len(used_tiles), input_tileset.count_tiles()))
@@ -238,9 +252,11 @@ def do_crushing(input_filename, output_filename):
     # - update columns
     # - update image source, width, height
     # Write output .tsx file.
+    print('Building new tileset...')
     input_tileset.remove_terrains(used_tiles)
     input_tileset.set_columns(new_image_size // tile_width)
     input_tileset.set_source(output_texture_filename, new_image_size, new_image_size)
+    input_tileset.set_tile_count(len(used_tiles))
     input_tileset.set_name(output_tileset_filename)
     input_tileset.save(output_tileset_filename)
 
@@ -248,6 +264,7 @@ def do_crushing(input_filename, output_filename):
     # - update tileset source
     # - update data: old index -> new index
     # Write output .tmx file.
+    print('Building new map...')
     input_map.set_tileset_source(output_tileset_filename)
 
     mapping = {}
