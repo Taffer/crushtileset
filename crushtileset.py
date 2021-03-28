@@ -193,7 +193,22 @@ def backup_filename(filename):
         shutil.move(filename, filename + '.bak')
 
 
-def do_crushing(input_filename, output_filename):
+def do_crush_png(filename):
+    ''' More crushing!
+    '''
+    orig_size = os.path.getsize(filename)
+    crushed_filename = '{0}.crushed'.format(filename)
+    os.system('pngcrush -brute {0} {1} > /dev/null 2>&1'.format(filename, crushed_filename))
+    crushed_size = os.path.getsize(crushed_filename)
+    if crushed_size > 0 and crushed_size < orig_size:
+        print('pngcrush succeeded, saved {0} bytes'.format(orig_size - crushed_size))
+        os.unlink(filename)
+        os.rename(crushed_filename, filename)
+    else:
+        print('pngcrushed failed, keeping existing atlas')
+
+
+def do_crushing(input_filename, output_filename, crush_pngs):
     input_map = Map(input_filename)
     input_tileset = Tileset(input_map.get_tileset_filename())
     input_texture = Image.open(input_tileset.get_texture_filename())
@@ -254,6 +269,9 @@ def do_crushing(input_filename, output_filename):
     backup_filename(output_texture_filename)
     output_texture.save(output_texture_filename, 'PNG')
 
+    if crush_pngs:
+        do_crush_png(output_texture_filename)
+
     # Go through .tsx file:
     # - remove terrains
     # - update columns
@@ -294,6 +312,7 @@ def main():
     parser = argparse.ArgumentParser(description='Create a texture atlas of only the tiles used in a map.',
                                      epilog='Textures are read out of the map file.')
     parser.add_argument('-o', '--out', metavar='output_map', help='output Map name; default is input_map-crushed', default=None)
+    parser.add_argument('--pngcrush', help='Crush the tile atlas with pngcrush.', action='store_true')
     parser.add_argument('input_map', help='input Map name')
     args = parser.parse_args()
 
@@ -307,7 +326,7 @@ def main():
     print('Crushing in progress, {0} ➜ {1}...'.format(args.input_map, args.out))
 
     try:
-        do_crushing(args.input_map, args.out)
+        do_crushing(args.input_map, args.out, args.pngcrush)
     except RuntimeError as error:
         print('Error: {0}'.format(error))
 
