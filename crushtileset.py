@@ -9,6 +9,8 @@
 import argparse
 import math
 import os
+import os.path
+import shutil
 
 from PIL import Image
 from xml.etree import ElementTree
@@ -186,6 +188,11 @@ def crush_filename(filename):
     return parts[0] + '-crushed' + parts[1]
 
 
+def backup_filename(filename):
+    if os.path.exists(filename):
+        shutil.move(filename, filename + '.bak')
+
+
 def do_crushing(input_filename, output_filename):
     input_map = Map(input_filename)
     input_tileset = Tileset(input_map.get_tileset_filename())
@@ -244,6 +251,7 @@ def do_crushing(input_filename, output_filename):
             dx = 0
             dy = dy + tile_height
 
+    backup_filename(output_texture_filename)
     output_texture.save(output_texture_filename, 'PNG')
 
     # Go through .tsx file:
@@ -257,6 +265,8 @@ def do_crushing(input_filename, output_filename):
     input_tileset.set_source(output_texture_filename, new_image_size, new_image_size)
     input_tileset.set_tile_count(len(used_tiles))
     input_tileset.set_name(output_tileset_filename)
+
+    backup_filename(output_tileset_filename)
     input_tileset.save(output_tileset_filename)
 
     # Go through .tmx file:
@@ -273,6 +283,8 @@ def do_crushing(input_filename, output_filename):
         idx = idx + 1
 
     input_map.set_data(data, mapping)
+
+    backup_filename(output_filename)
     input_map.save(output_filename)
 
 
