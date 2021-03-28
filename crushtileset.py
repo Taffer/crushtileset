@@ -30,30 +30,28 @@ class Map:
         return tilesets[0].attrib['source']
 
     def get_data(self, layer=1):
-        ''' Currently only one layer is supported, CSV only.
+        ''' Multiple layers are supported, CSV only.
         '''
-        layers = self.root.findall('.//layer')
-        if len(layers) > 1:
-            raise RuntimeError('Only single layer maps are currently supported, found {0}.'.format(len(layers)))
+        layer_data = []
+        for the_layer in self.root.findall('.//layer'):
+            layer_id = the_layer.attrib['id']
+            layer_width = int(the_layer.attrib['width'])
+            layer_height = int(the_layer.attrib['height'])
 
-        the_layer = layers[0]
+            data = the_layer.find('data')
+            if data.attrib['encoding'] != 'csv':
+                raise RuntimeError('Unable to parse layer data in {0} format'.format(data.attrib['encoding']))
 
-        layer_id = the_layer.attrib['id']
-        layer_width = int(the_layer.attrib['width'])
-        layer_height = int(the_layer.attrib['height'])
+            # CSV data is going to be "height" lines of "width" ints separated
+            # by commas.
+            the_data = []
+            lines = data.text.split()
+            for line in lines:
+                the_data.append([int(c) for c in line.split(',') if c != ''])
 
-        data = the_layer.find('data')
-        if data.attrib['encoding'] != 'csv':
-            raise RuntimeError('Unable to parse layer data in {0} format'.format(data.attrib['encoding']))
+            layer_data.append(the_data)
 
-        # CSV data is going to be "height" lines of "width" ints separated by
-        # commas.
-        lines = data.text.split()
-        data = []
-        for line in lines:
-            data.append([int(c) for c in line.split(',') if c != ''])
-
-        return data
+        return layer_data
 
     def set_tileset_source(self, source):
         self.root.find('tileset').attrib['source'] = source
@@ -61,29 +59,29 @@ class Map:
     def set_data(self, data, mapping, layer=1):
         ''' Currently only one layer is supported.
         '''
-        for y in range(len(data)):
-            for x in range(len(data[y])):
-                data[y][x] = mapping[data[y][x]]
+        new_layer_data = []
+        for the_layer in data:
+            for y in range(len(the_layer)):
+                for x in range(len(the_layer[y])):
+                    the_layer[y][x] = mapping[the_layer[y][x]]
 
-        lines = []
-        for row in data:
-            line = ','.join([str(x) for x in row])
-            lines.append(line)
-        new_data = ',\n'.join(lines)
-        new_data = new_data + '\n'
+            lines = []
+            for row in the_layer:
+                line = ','.join([str(x) for x in row])
+                lines.append(line)
+            new_data = ',\n'.join(lines)
+            new_data = new_data + '\n'
+            new_layer_data.append(new_data)
 
-        the_layer = self.root.find('layer')
-        data = the_layer.find('data')
-        if data.attrib['encoding'] != 'csv':
-            raise RuntimeError('Unable to write layer data in {0} format'.format(data.attrib['encoding']))
+        layer_idx = 0
+        for the_layer in self.root.findall('.//layer'):
+            data = the_layer.find('data')
+            if data.attrib['encoding'] != 'csv':
+                raise RuntimeError('Unable to write layer {0} data in {1} format'.format(layer_idx + 1, data.attrib['encoding']))
 
-        layers = self.root.findall('.//layer')
-        if len(layers) > 1:
-            raise RuntimeError('Only single layer maps are currently supported, found {0}.'.format(len(layers)))
-
-        the_layer = layers[0]
-        the_data = the_layer.find('data')
-        the_data.text = new_data
+            the_data = the_layer.find('data')
+            the_data.text = new_layer_data[layer_idx]
+            layer_idx = layer_idx + 1
 
 
 class Tileset:
@@ -206,10 +204,11 @@ def do_crushing(input_filename, output_filename):
 
     used_tiles = []
     data = input_map.get_data()
-    for column in data:
-        for row in column:
-            if row not in used_tiles:
-                used_tiles.append(row)
+    for layer in data:
+        for column in layer:
+            for row in column:
+                if row not in used_tiles:
+                    used_tiles.append(row)
     used_tiles.sort()
 
     print('{0} used tiles out of {1}'.format(len(used_tiles), input_tileset.count_tiles()))
