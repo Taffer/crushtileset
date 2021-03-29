@@ -7,10 +7,12 @@
 # Copyright (c) 2021 Chris Herborth (https://github.com/Taffer/)
 
 import argparse
+import base64
 import math
 import os
 import os.path
 import shutil
+import struct
 
 from PIL import Image
 from xml.etree import ElementTree
@@ -44,20 +46,30 @@ class Map:
 
         return the_data
 
+    def decode_base64(self, data):
+        ''' Decode layer data in base64 encoded format.
+        '''
+        the_data = base64.b64decode(data.text)
+
+        # CSV data is organized into rows, so we make this one big row.
+        return [[x[0] for x in struct.iter_unpack('<I', the_data)]]
+
     def get_data(self):
         ''' CSV only.
         '''
-        layer_data = []
+        layer_data = {}
         for the_layer in self.root.findall('.//layer'):
             layer_id = the_layer.attrib['id']
             layer_width = int(the_layer.attrib['width'])
             layer_height = int(the_layer.attrib['height'])
 
             data = the_layer.find('data')
-            if data.attrib['encoding'] != 'csv':
+            if data.attrib['encoding'] == 'csv':
+                layer_data[layer_id] = self.decode_csv(data)
+            elif data.attrib['encoding'] == 'base64':
+                layer_data[layer_id] = self.decode_base64(data)
+            else:
                 raise RuntimeError('Unable to parse layer data in {0} format'.format(data.attrib['encoding']))
-
-            layer_data.append(self.decode_csv(data))
 
         return layer_data
 
@@ -74,24 +86,31 @@ class Map:
 
         return new_data
 
+    def encode_base64(self, layer):
+        ''' base64 layers are one huge row, thanks to CSV assuming row data.
+        '''
+        format = '<' + 'I' * len(layer[0])
+        data = struct.pack(format, *(layer[0]))
+        return base64.b64encode(data).decode('utf-8')
+
     def set_data(self, data, mapping):
-        new_layer_data = []
-        for the_layer in data:
-            for y in range(len(the_layer)):
-                for x in range(len(the_layer[y])):
-                    the_layer[y][x] = mapping[the_layer[y][x]]
-
-            new_layer_data.append(self.encode_csv(the_layer))
-
-        layer_idx = 0
         for the_layer in self.root.findall('.//layer'):
-            data = the_layer.find('data')
-            if data.attrib['encoding'] != 'csv':
-                raise RuntimeError('Unable to write layer {0} data in {1} format'.format(layer_idx + 1, data.attrib['encoding']))
+            layer_id = the_layer.attrib['id']
+            orig_data = data[layer_id]
 
-            the_data = the_layer.find('data')
-            the_data.text = new_layer_data[layer_idx]
-            layer_idx = layer_idx + 1
+            for y in range(len(orig_data)):
+                for x in range(len(orig_data[y])):
+                    orig_data[y][x] = mapping[orig_data[y][x]]
+
+            data = the_layer.find('data')
+            if data.attrib['encoding'] == 'csv':
+                new_data = self.encode_csv(orig_data)
+            elif data.attrib['encoding'] == 'base64':
+                new_data = self.encode_base64(orig_data)
+            else:
+                raise RuntimeError('Unable to write layer {0} data in {1} format'.format(layer_id, data.attrib['encoding']))
+
+            data.text = new_data
 
 
 class Tileset:
@@ -234,11 +253,11 @@ def do_crushing(input_filename, output_filename, crush_pngs):
 
     used_tiles = []
     data = input_map.get_data()
-    for layer in data:
-        for column in layer:
-            for row in column:
-                if row not in used_tiles:
-                    used_tiles.append(row)
+    for k in data.keys():
+        for row in data[k]:
+            for column in row:
+                if column not in used_tiles:
+                    used_tiles.append(column)
     used_tiles.sort()
 
     print('{0} used tiles out of {1}'.format(len(used_tiles), input_tileset.count_tiles()))
