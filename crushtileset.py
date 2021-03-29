@@ -15,6 +15,7 @@ import os.path
 import shutil
 import struct
 import zlib
+import zstandard
 
 from PIL import Image
 from xml.etree import ElementTree
@@ -65,12 +66,20 @@ class Map:
         return [[x[0] for x in struct.iter_unpack('<I', zlib.decompress(the_data))]]
 
     def decode_base64gzip(self, data):
-        ''' Decode layer data in zlib-compressed base64 encoded format.
+        ''' Decode layer data in gzip-compressed base64 encoded format.
         '''
         the_data = base64.b64decode(data.text)
 
         # CSV data is organized into rows, so we make this one big row.
         return [[x[0] for x in struct.iter_unpack('<I', gzip.decompress(the_data))]]
+
+    def decode_base64zstd(self, data):
+        ''' Decode layer data in zstandard-compressed base64 encoded format.
+        '''
+        the_data = base64.b64decode(data.text)
+
+        # CSV data is organized into rows, so we make this one big row.
+        return [[x[0] for x in struct.iter_unpack('<I', zstandard.decompress(the_data))]]
 
     def get_data(self):
         ''' CSV only.
@@ -92,6 +101,8 @@ class Map:
                     layer_data[layer_id] = self.decode_base64zlib(data)
                 elif compression == 'gzip':
                     layer_data[layer_id] = self.decode_base64gzip(data)
+                elif compression == 'zstd':
+                    layer_data[layer_id] = self.decode_base64zstd(data)
                 else:
                     raise RuntimeError('Unsupported compression {0} on layer {1}'.format(compression, layer_id))
             else:
@@ -133,6 +144,13 @@ class Map:
         data = gzip.compress(struct.pack(format, *(layer[0])), compresslevel=9)
         return base64.b64encode(data).decode('utf-8')
 
+    def encode_base64zstd(self, layer):
+        ''' base64 layers are one huge row, thanks to CSV assuming row data.
+        '''
+        format = '<' + 'I' * len(layer[0])
+        data = zstandard.compress(struct.pack(format, *(layer[0])))
+        return base64.b64encode(data).decode('utf-8')
+
     def set_data(self, data, mapping):
         for the_layer in self.root.findall('.//layer'):
             layer_id = the_layer.attrib['id']
@@ -153,6 +171,8 @@ class Map:
                     new_data = self.encode_base64zlib(orig_data)
                 elif compression == 'gzip':
                     new_data = self.encode_base64gzip(orig_data)
+                elif compression == 'zstd':
+                    new_data = self.encode_base64zstd(orig_data)
                 else:
                     raise RuntimeError('Unsupported compression {0} on layer {1}'.format(compression, layer_id))
             else:

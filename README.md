@@ -17,6 +17,7 @@ Python 3 and:
 * ElementTree (this might come standard)
 * PIL (try `sudo pip3 install pil` or `sudo apt install python3-pil` or your OS'
   equivalent; advanced users can do it via `virtualenv` or something)
+* zstandard (`sudo pip3 install zstandard`)
 
 ## Features
 
@@ -24,7 +25,7 @@ Python 3 and:
 * Supports multiple layers. Non-tile layers (like object layers) are
   preserved untouched.
 * Supports layer data encoded in CSV and base64, as well as base64 encoded
-  layers compressed with zlib or gzip.
+  layers compressed with zlib, gzip, or zstandard.
 * Can use `pngcrush` (if it's in your `PATH`) to save more space by crushing
   the tile atlas using *brute force*.
 
