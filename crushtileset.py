@@ -8,6 +8,7 @@
 
 import argparse
 import base64
+import gzip
 import math
 import os
 import os.path
@@ -63,6 +64,14 @@ class Map:
         # CSV data is organized into rows, so we make this one big row.
         return [[x[0] for x in struct.iter_unpack('<I', zlib.decompress(the_data))]]
 
+    def decode_base64gzip(self, data):
+        ''' Decode layer data in zlib-compressed base64 encoded format.
+        '''
+        the_data = base64.b64decode(data.text)
+
+        # CSV data is organized into rows, so we make this one big row.
+        return [[x[0] for x in struct.iter_unpack('<I', gzip.decompress(the_data))]]
+
     def get_data(self):
         ''' CSV only.
         '''
@@ -81,6 +90,8 @@ class Map:
                     layer_data[layer_id] = self.decode_base64(data)
                 elif compression == 'zlib':
                     layer_data[layer_id] = self.decode_base64zlib(data)
+                elif compression == 'gzip':
+                    layer_data[layer_id] = self.decode_base64gzip(data)
                 else:
                     raise RuntimeError('Unsupported compression {0} on layer {1}'.format(compression, layer_id))
             else:
@@ -115,6 +126,13 @@ class Map:
         data = zlib.compress(struct.pack(format, *(layer[0])), level=9)
         return base64.b64encode(data).decode('utf-8')
 
+    def encode_base64gzip(self, layer):
+        ''' base64 layers are one huge row, thanks to CSV assuming row data.
+        '''
+        format = '<' + 'I' * len(layer[0])
+        data = gzip.compress(struct.pack(format, *(layer[0])), compresslevel=9)
+        return base64.b64encode(data).decode('utf-8')
+
     def set_data(self, data, mapping):
         for the_layer in self.root.findall('.//layer'):
             layer_id = the_layer.attrib['id']
@@ -133,6 +151,8 @@ class Map:
                     new_data = self.encode_base64(orig_data)
                 elif compression == 'zlib':
                     new_data = self.encode_base64zlib(orig_data)
+                elif compression == 'gzip':
+                    new_data = self.encode_base64gzip(orig_data)
                 else:
                     raise RuntimeError('Unsupported compression {0} on layer {1}'.format(compression, layer_id))
             else:
