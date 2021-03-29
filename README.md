@@ -23,6 +23,8 @@ Python 3 and:
 * Writes out a new map, new tileset, and new tile atlas.
 * Supports multiple layers. Non-tile layers (like object layers) are
   preserved untouched.
+* Can use `pngcrush` (if it's in your `PATH`) to save more space by crushing
+  the tile atlas using *brute force*.
 
 ## Limitations
 

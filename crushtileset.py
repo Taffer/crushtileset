@@ -31,8 +31,21 @@ class Map:
 
         return tilesets[0].attrib['source']
 
-    def get_data(self, layer=1):
-        ''' Multiple layers are supported, CSV only.
+    def decode_csv(self, data):
+        ''' Decode layer data in CSV format.
+
+        CSV data is going to be "height" lines of "width" ints separated
+        by commas.
+        '''
+        the_data = []
+        lines = data.text.split()
+        for line in lines:
+            the_data.append([int(c) for c in line.split(',') if c != ''])
+
+        return the_data
+
+    def get_data(self):
+        ''' CSV only.
         '''
         layer_data = []
         for the_layer in self.root.findall('.//layer'):
@@ -44,36 +57,31 @@ class Map:
             if data.attrib['encoding'] != 'csv':
                 raise RuntimeError('Unable to parse layer data in {0} format'.format(data.attrib['encoding']))
 
-            # CSV data is going to be "height" lines of "width" ints separated
-            # by commas.
-            the_data = []
-            lines = data.text.split()
-            for line in lines:
-                the_data.append([int(c) for c in line.split(',') if c != ''])
-
-            layer_data.append(the_data)
+            layer_data.append(self.decode_csv(data))
 
         return layer_data
 
     def set_tileset_source(self, source):
         self.root.find('tileset').attrib['source'] = source
 
-    def set_data(self, data, mapping, layer=1):
-        ''' Currently only one layer is supported.
-        '''
+    def encode_csv(self, layer):
+        lines = []
+        for row in layer:
+            line = ','.join([str(x) for x in row])
+            lines.append(line)
+        new_data = ',\n'.join(lines)
+        new_data = new_data + '\n'
+
+        return new_data
+
+    def set_data(self, data, mapping):
         new_layer_data = []
         for the_layer in data:
             for y in range(len(the_layer)):
                 for x in range(len(the_layer[y])):
                     the_layer[y][x] = mapping[the_layer[y][x]]
 
-            lines = []
-            for row in the_layer:
-                line = ','.join([str(x) for x in row])
-                lines.append(line)
-            new_data = ',\n'.join(lines)
-            new_data = new_data + '\n'
-            new_layer_data.append(new_data)
+            new_layer_data.append(self.encode_csv(the_layer))
 
         layer_idx = 0
         for the_layer in self.root.findall('.//layer'):
