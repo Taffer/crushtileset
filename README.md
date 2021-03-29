@@ -23,6 +23,8 @@ Python 3 and:
 * Writes out a new map, new tileset, and new tile atlas.
 * Supports multiple layers. Non-tile layers (like object layers) are
   preserved untouched.
+* Supports layer data encoded in CSV and base64, as well as base64 encoded
+  layers compressed with zlib or gzip.
 * Can use `pngcrush` (if it's in your `PATH`) to save more space by crushing
   the tile atlas using *brute force*.
 
@@ -31,7 +33,6 @@ Python 3 and:
 The current version works with *one* tileset only. Future versions will add
 support for:
 
-* Map data in formats other than CSV.
 * More than one tileset.
 * ???
 
