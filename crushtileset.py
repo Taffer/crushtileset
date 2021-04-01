@@ -26,6 +26,20 @@ class Map:
         self.tree = ElementTree.parse(filename)
         self.root = self.tree.getroot()
 
+    def discover_used(self):
+        ''' Discover the used Tile IDs in a given map.
+        '''
+        used_tiles = []
+        data = self.get_data()
+        for k in data.keys():
+            for row in data[k]:
+                for column in row:
+                    if column not in used_tiles:
+                        used_tiles.append(column)
+        used_tiles.sort()
+
+        return used_tiles
+
     def save(self, filename):
         self.tree.write(filename, encoding='UTF-8', xml_declaration=True)
 
@@ -151,7 +165,9 @@ class Map:
         data = zstandard.compress(struct.pack(format, *(layer[0])))
         return base64.b64encode(data).decode('utf-8')
 
-    def set_data(self, some_data, mapping):
+    def set_data(self, mapping):
+        some_data = self.get_data()
+
         for the_layer in self.root.findall('.//layer'):
             layer_id = the_layer.attrib['id']
             layer_name = the_layer.attrib['name']
@@ -322,14 +338,7 @@ def do_crushing(input_filename, output_filename, crush_pngs):
     # BUG: The tileset file and tile atlas paths are relative to the map file;
     #      we need to open them with the path to the map file instead.
 
-    used_tiles = []
-    data = input_map.get_data()
-    for k in data.keys():
-        for row in data[k]:
-            for column in row:
-                if column not in used_tiles:
-                    used_tiles.append(column)
-    used_tiles.sort()
+    used_tiles = input_map.discover_used()
 
     print('{0} used tiles out of {1}'.format(len(used_tiles), input_tileset.count_tiles()))
 
@@ -398,7 +407,7 @@ def do_crushing(input_filename, output_filename, crush_pngs):
         mapping[item] = idx
         idx = idx + 1
 
-    input_map.set_data(data, mapping)
+    input_map.set_data(mapping)
 
     backup_filename(output_filename)
     input_map.save(output_filename)
