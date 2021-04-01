@@ -40,6 +40,21 @@ class Map:
 
         return used_tiles
 
+    def crush(self, used_tiles, output_tileset_filename):
+        # Go through .tmx file:
+        # - update tileset source
+        # - update data: old index -> new index
+        # Write output .tmx file.
+        self.set_tileset_source(output_tileset_filename)
+
+        mapping = {}
+        idx = 1
+        for item in used_tiles:
+            mapping[item] = idx
+            idx = idx + 1
+
+        self.set_data(mapping)
+
     def save(self, filename):
         self.tree.write(filename, encoding='UTF-8', xml_declaration=True)
 
@@ -212,6 +227,50 @@ class Tileset:
         else:
             self.columns = int(self.root.find('image').attrib['width']) // self.width
 
+    def create_output_texture(self, used_tiles, new_image_size):
+        input_texture = Image.open(self.get_texture_filename())
+        output_texture = Image.new(input_texture.mode, (new_image_size, new_image_size))
+
+        # Go through each used_tiles:
+        # - find its image in input_texture
+        # - copy it to output_texture
+        # - record its location
+        # Write output_texture.
+        tile_width = self.get_tile_width()
+        tile_height = self.get_tile_height()
+
+        dx = 0  # Offset to write the next tile at.
+        dy = 0
+
+        for item in used_tiles:
+            tx, ty = self.find_tile(item)
+            region = (tx, ty, tx + tile_width, ty + tile_height)
+            with input_texture.crop(region) as chunk:
+                target = (dx, dy, dx + tile_width, dy + tile_height)
+                output_texture.paste(chunk, target)
+
+            dx = dx + tile_width
+            if dx + tile_width > new_image_size:
+                dx = 0
+                dy = dy + tile_height
+
+        return output_texture
+
+    def crush(self, used_tiles, new_image_size, output_texture_filename, output_tileset_filename):
+        # Go through .tsx file:
+        # - remove terrains
+        # - update columns
+        # - update image source, width, height
+        # Write output .tsx file.
+        tile_width = self.get_tile_width()
+        tile_height = self.get_tile_height()
+
+        self.remove_terrains(used_tiles)
+        self.set_columns(new_image_size // tile_width)
+        self.set_source(output_texture_filename, new_image_size, new_image_size)
+        self.set_tile_count(len(used_tiles))
+        self.set_name(output_tileset_filename)
+
     def save(self, filename):
         self.tree.write(filename, encoding='UTF-8', xml_declaration=True)
 
@@ -325,7 +384,6 @@ def do_crush_png(filename):
 def do_crushing(input_filename, output_filename, crush_pngs):
     input_map = Map(input_filename)
     input_tileset = Tileset(input_map.get_tileset_filename())
-    input_texture = Image.open(input_tileset.get_texture_filename())
 
     parts = os.path.splitext(output_filename)
     output_tileset_filename = parts[0] + '.tsx'
@@ -348,66 +406,22 @@ def do_crushing(input_filename, output_filename, crush_pngs):
 
     print('Building a new {0} x {0} texture'.format(new_image_size))
 
-    output_texture = Image.new(input_texture.mode, (new_image_size, new_image_size))
+    output_texture = input_tileset.create_output_texture(used_tiles, new_image_size)
 
-    # Go through each used_tiles:
-    # - find its image in input_texture
-    # - copy it to output_texture
-    # - record its location
-    # Write output_texture.
-    tile_width = input_tileset.get_tile_width()
-    tile_height = input_tileset.get_tile_height()
+    print('Building new tileset...')
+    input_tileset.crush(used_tiles, new_image_size, output_texture_filename, output_tileset_filename)
 
-    dx = 0  # Offset to write the next tile at.
-    dy = 0
+    print('Building new map...')
+    input_map.crush(used_tiles, output_tileset_filename)
 
-    for item in used_tiles:
-        tx, ty = input_tileset.find_tile(item)
-        region = (tx, ty, tx + tile_width, ty + tile_height)
-        with input_texture.crop(region) as chunk:
-            target = (dx, dy, dx + tile_width, dy + tile_height)
-            output_texture.paste(chunk, target)
-
-        dx = dx + tile_width
-        if dx + tile_width > new_image_size:
-            dx = 0
-            dy = dy + tile_height
-
+    print('Saving files...')
     backup_filename(output_texture_filename)
     output_texture.save(output_texture_filename, 'PNG')
-
     if crush_pngs:
         do_crush_png(output_texture_filename)
 
-    # Go through .tsx file:
-    # - remove terrains
-    # - update columns
-    # - update image source, width, height
-    # Write output .tsx file.
-    print('Building new tileset...')
-    input_tileset.remove_terrains(used_tiles)
-    input_tileset.set_columns(new_image_size // tile_width)
-    input_tileset.set_source(output_texture_filename, new_image_size, new_image_size)
-    input_tileset.set_tile_count(len(used_tiles))
-    input_tileset.set_name(output_tileset_filename)
-
     backup_filename(output_tileset_filename)
     input_tileset.save(output_tileset_filename)
-
-    # Go through .tmx file:
-    # - update tileset source
-    # - update data: old index -> new index
-    # Write output .tmx file.
-    print('Building new map...')
-    input_map.set_tileset_source(output_tileset_filename)
-
-    mapping = {}
-    idx = 1
-    for item in used_tiles:
-        mapping[item] = idx
-        idx = idx + 1
-
-    input_map.set_data(mapping)
 
     backup_filename(output_filename)
     input_map.save(output_filename)
