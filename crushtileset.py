@@ -151,10 +151,13 @@ class Map:
         data = zstandard.compress(struct.pack(format, *(layer[0])))
         return base64.b64encode(data).decode('utf-8')
 
-    def set_data(self, data, mapping):
+    def set_data(self, some_data, mapping):
         for the_layer in self.root.findall('.//layer'):
             layer_id = the_layer.attrib['id']
-            orig_data = data[layer_id]
+            layer_name = the_layer.attrib['name']
+            print('Layer "{0}" (ID: {1})'.format(layer_name, layer_id))
+
+            orig_data = some_data[layer_id]
 
             for y in range(len(orig_data)):
                 for x in range(len(orig_data[y])):
