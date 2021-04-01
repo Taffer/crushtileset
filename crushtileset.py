@@ -366,6 +366,14 @@ def backup_filename(filename):
         shutil.move(filename, filename + '.bak')
 
 
+def unbackup_filename(filename):
+    if os.path.exists(filename):
+        os.path.unlink(filename)
+
+    if os.path.exists(filename + '.bak'):
+        shutil.move(filename + '.bak', filename)
+
+
 def do_crush_png(filename):
     ''' More crushing!
     '''
@@ -382,13 +390,22 @@ def do_crush_png(filename):
 
 
 def do_crushing(input_filename, output_filename, crush_pngs):
-    input_map = Map(input_filename)
-    input_tileset = Tileset(input_map.get_tileset_filename())
+    input_map = None
+    try:
+        input_map = Map(input_filename)
+    except Exception as ex:
+        print('Unable to read map {0}: {1}'.format(input_filename, ex.err))
+        raise SystemExit
+    input_tileset = None
+    try:
+        input_tileset = Tileset(input_map.get_tileset_filename())
+    except Exception as ex:
+        print('Unable to read tileset {0}: {1}'.format(input_map.get_tileset_filename(), ex.err))
+        raise SystemExit
 
     parts = os.path.splitext(output_filename)
     output_tileset_filename = parts[0] + '.tsx'
     output_texture_filename = parts[0] + '.png'
-
     print('Loaded {0}, tileset is {1}, texture is {2}'.format(input_filename,
                                                               input_map.get_tileset_filename(),
                                                               input_tileset.get_texture_filename()))
@@ -396,35 +413,76 @@ def do_crushing(input_filename, output_filename, crush_pngs):
     # BUG: The tileset file and tile atlas paths are relative to the map file;
     #      we need to open them with the path to the map file instead.
 
-    used_tiles = input_map.discover_used()
-
-    print('{0} used tiles out of {1}'.format(len(used_tiles), input_tileset.count_tiles()))
+    used_tiles = None
+    try:
+        used_tiles = input_map.discover_used()
+        print('{0} used tiles out of {1}'.format(len(used_tiles), input_tileset.count_tiles()))
+    except Exception as ex:
+        print('Unable to discover used tiles: {0}'.format(ex.err))
+        raise SystemExit
 
     # Find the best texture size. We need a power-of-two texture that'll fit
     # the ceil(sqrt(used_tiles)) * tile_width pixels.
     new_image_size = lookup_size(len(used_tiles), input_tileset.get_tile_width(), input_tileset.get_tile_height())
 
-    print('Building a new {0} x {0} texture'.format(new_image_size))
+    output_texture = None
+    try:
+        print('Building a new {0} x {0} texture'.format(new_image_size))
+        output_texture = input_tileset.create_output_texture(used_tiles, new_image_size)
+    except Exception as ex:
+        print('Unable to build new texture: {0}'.format(ex.err))
+        raise SystemExit
 
-    output_texture = input_tileset.create_output_texture(used_tiles, new_image_size)
+    try:
+        print('Building new tileset...')
+        input_tileset.crush(used_tiles, new_image_size, output_texture_filename, output_tileset_filename)
+    except Exception as ex:
+        print('Unable to crush tileset: {0}'.format(ex.err))
+        raise SystemExit
 
-    print('Building new tileset...')
-    input_tileset.crush(used_tiles, new_image_size, output_texture_filename, output_tileset_filename)
+    try:
+        print('Building new map...')
+        input_map.crush(used_tiles, output_tileset_filename)
+    except Exception as ex:
+        print('Unable to crush map: {0}'.format(ex.err))
+        raise SystemExit
 
-    print('Building new map...')
-    input_map.crush(used_tiles, output_tileset_filename)
+    try:
+        print('Saving files...')
+        backup_filename(output_texture_filename)
+        output_texture.save(output_texture_filename, 'PNG')
+    except Exception as ex:
+        print('Unable to save texture file: {0}'.format(ex.err))
+        try:
+            unbackup_filename(output_texture_filename)
+        except Exception:
+            pass  # Ignored because we're on the way out.
+        raise SystemExit
 
-    print('Saving files...')
-    backup_filename(output_texture_filename)
-    output_texture.save(output_texture_filename, 'PNG')
     if crush_pngs:
         do_crush_png(output_texture_filename)
 
-    backup_filename(output_tileset_filename)
-    input_tileset.save(output_tileset_filename)
+    try:
+        backup_filename(output_tileset_filename)
+        input_tileset.save(output_tileset_filename)
+    except Exception as ex:
+        print('Unable to save tileset file: {0}'.format(ex.err))
+        try:
+            unbackup_filename(output_tileset_filename)
+        except Exception:
+            pass  # Ignored because we're on the way out.
+        raise SystemExit
 
-    backup_filename(output_filename)
-    input_map.save(output_filename)
+    try:
+        backup_filename(output_filename)
+        input_map.save(output_filename)
+    except Exception as ex:
+        print('Unable to save map file: {0}'.format(ex.err))
+        try:
+            unbackup_filename(output_filename)
+        except Exception:
+            pass  # Ignored because we're on the way out.
+        raise SystemExit
 
 
 def main():
