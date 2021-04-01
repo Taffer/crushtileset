@@ -300,7 +300,7 @@ def do_crush_png(filename):
         os.unlink(filename)
         os.rename(crushed_filename, filename)
     else:
-        print('pngcrushed failed, keeping existing atlas')
+        print('pngcrush failed, keeping existing atlas')
 
 
 def do_crushing(input_filename, output_filename, crush_pngs):
