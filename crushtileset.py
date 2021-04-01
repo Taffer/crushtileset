@@ -26,6 +26,11 @@ class Map:
         self.tree = ElementTree.parse(filename)
         self.root = self.tree.getroot()
 
+        # If the filename has path components, we need to remember that so we
+        # can open the tileset and atlas files correctly.
+        parts = os.path.split(filename)
+        self.path_prefix = parts[0]
+
     def discover_used(self):
         ''' Discover the used Tile IDs in a given map.
         '''
@@ -63,7 +68,7 @@ class Map:
         if len(tilesets) > 1:
             raise RuntimeError('Only single tileset maps are currently supported, found {0}.'.format(len(tilesets)))
 
-        return tilesets[0].attrib['source']
+        return os.path.join(self.path_prefix, tilesets[0].attrib['source'])
 
     def decode_csv(self, data):
         ''' Decode layer data in CSV format.
@@ -217,6 +222,11 @@ class Map:
 
 class Tileset:
     def __init__(self, filename):
+        # If the filename has path components, we need to remember that so we
+        # can open the tileset and atlas files correctly.
+        parts = os.path.split(filename)
+        self.path_prefix = parts[0]
+
         self.tree = ElementTree.parse(filename)
         self.root = self.tree.getroot()
         self.width = int(self.root.attrib['tilewidth'])
@@ -275,7 +285,7 @@ class Tileset:
         self.tree.write(filename, encoding='UTF-8', xml_declaration=True)
 
     def get_texture_filename(self):
-        return self.root.find('image').attrib['source']
+        return os.path.join(self.path_prefix, self.root.find('image').attrib['source'])
 
     def get_tile_width(self):
         return self.width
